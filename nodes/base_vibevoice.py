@@ -542,7 +542,7 @@ class BaseVibeVoiceNode:
                     self.model.exllama = exllama_wrapper               
                 
                 # Load processor
-                from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
+                from processor.vibevoice_processor import VibeVoiceProcessor
                 self.processor = VibeVoiceProcessor.from_pretrained(model_path)
                 
                 # Restore environment variables
