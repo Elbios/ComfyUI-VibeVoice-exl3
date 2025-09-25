@@ -47,8 +47,6 @@ exllamav3-v0.0.6 - choose whl based on your python version: https://github.com/m
 ```
 cd C:\DATA\SD\ComfyUI_windows_portable_nvidia\ComfyUI_windows_portable\python_embeded
 python.exe -m pip install https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4%2Bcu126torch2.6.0cxx11abiFALSE-cp311-cp311-win_amd64.whl
-# uninstall existing exllamav3, if you have one
-python.exe -m pip uninstall exllamav3
 
 # install my exllamav3 for Python 3.11.x (choose correct whl here from my repo, link above)
 python.exe -m pip install https://github.com/Mozer/exllamav3/releases/download/v0.0.6/exllamav3-0.0.6+cu128.torch2.7.0-cp311-cp311-win_amd64.whl
@@ -336,6 +334,7 @@ Contributions welcome! Please:
 3. Update documentation as needed
 
 4. Submit pull requests with clear descriptions
+
 
 
 
