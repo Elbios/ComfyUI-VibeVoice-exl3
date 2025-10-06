@@ -39,11 +39,12 @@ class VibeVoiceService:
             logger.warning("SageAttention not available; falling back to auto attention")
             self._attention = "auto"
         self._quant_mode = os.getenv("VV_QUANT", "bf16")
-        self._diffusion_steps = int(os.getenv("VV_DIFFUSION_STEPS", "15"))
-        self._negative_cache_steps = int(os.getenv("VV_NEG_STEPS_CACHE", "4"))
-        self._increase_cfg = os.getenv("VV_INCREASE_CFG", "0") == "1"
+        self._diffusion_steps = int(os.getenv("VV_DIFFUSION_STEPS", "5"))
+        self._negative_cache_steps = int(os.getenv("VV_NEG_STEPS_CACHE", "2"))
+        self._increase_cfg = os.getenv("VV_INCREASE_CFG", "1") == "1"
         self._temperature = float(os.getenv("VV_TEMPERATURE", "0.95"))
         self._free_after_job = os.getenv("VV_FREE_MEMORY_AFTER_JOB", "0") == "1"
+        self._use_sampling = os.getenv("VV_USE_SAMPLING", "0") == "1"
 
         if os.getenv("VV_PRELOAD", "0") == "1":
             self._ensure_model_loaded()
@@ -102,8 +103,6 @@ class VibeVoiceService:
         self._ensure_model_loaded()
 
         speakers = ["Speaker 1"]
-        formatted_text = self._node._format_text_for_vibevoice(text, speakers)
-
         voice_samples = []
         if speaker_audio_path:
             try:
@@ -112,19 +111,18 @@ class VibeVoiceService:
                 logger.warning("Failed to load reference audio '%s': %s", speaker_audio_path, exc)
         if not voice_samples:
             voice_samples = [self._node._create_synthetic_voice_sample(0)]
-
-        use_sampling = top_p < 0.999
+        formatted_text = self._node._format_text_for_vibevoice(text, speakers)
         generation = self._node._generate_with_vibevoice(
             formatted_text,
             voice_samples=voice_samples,
             cfg_scale=cfg_scale,
             seed=seed,
             diffusion_steps=self._diffusion_steps,
-            use_sampling=use_sampling,
+            use_sampling=self._use_sampling,
             temperature=self._temperature,
             top_p=top_p,
             streaming=False,
-            buffer_duration=5,
+            buffer_duration=1,
             max_new_tokens=32637,
             negative_llm_steps_to_cache=self._negative_cache_steps,
             increase_cfg=self._increase_cfg,
@@ -223,12 +221,14 @@ def generate_audio(
     resolved_seed = int(seed) if seed is not None else 42
 
     reference_path = _extract_file_path(speaker_audio)
+    cfg_value = 1.4 if cfg_scale in (None, "") else float(cfg_scale)
+    top_p_value = 0.95 if top_p in (None, "") else float(top_p)
     return _SERVICE.generate(
         text=text,
         speaker_audio_path=reference_path,
-        cfg_scale=float(cfg_scale) if cfg_scale else 1.3,
+        cfg_scale=cfg_value,
         seed=resolved_seed,
-        top_p=float(top_p) if top_p else 0.95,
+        top_p=top_p_value,
     )
 
 
@@ -252,14 +252,14 @@ api_inputs = [
     gr.Slider(minimum=0, maximum=50, value=14.6, label="Speaking Rate"),
     gr.Slider(minimum=1, maximum=5, value=4, label="DNSMOS Overall"),
     gr.Checkbox(value=True, label="Denoise Speaker"),
-    gr.Slider(minimum=1, maximum=10, value=3, label="CFG Scale"),
-    gr.Slider(minimum=0.1, maximum=1.0, value=0.9, label="Top P"),
+    gr.Slider(minimum=1, maximum=10, value=1.4, label="CFG Scale"),
+    gr.Slider(minimum=0.1, maximum=1.0, value=0.95, label="Top P"),
     gr.Slider(minimum=1, maximum=100, value=1, label="Min K"),
     gr.Slider(minimum=0.01, maximum=1.0, value=0.2, label="Min P"),
     gr.Checkbox(value=False, label="Linear"),
     gr.Slider(minimum=0, maximum=1, value=0.7, label="Confidence"),
     gr.Checkbox(value=False, label="Quadratic"),
-    gr.Number(value=123, label="Seed"),
+    gr.Number(value=42, label="Seed"),
     gr.Checkbox(value=False, label="Randomize Seed"),
     gr.Textbox(value="[]", label="Unconditional Keys"),
 ]
