@@ -33,6 +33,10 @@ def build_tts_payload(model, text, ref_audio_server_path, mood, seed):
     print(f"Using model: {model}")
     print(f"Using random seed: {seed}")
 
+    # CFG_SCALE for VibeVoice: 1.3 or 1.4
+    cfg_scale = 1.4
+    top_p = 0.95
+
     payload = {
         "data": [
             model, text, "en-us",
@@ -42,7 +46,7 @@ def build_tts_payload(model, text, ref_audio_server_path, mood, seed):
             0.8 if mood == 'DISGUSTED' else 0.05, 0.8 if mood == 'AFRAID' else 0.05,
             0.8 if mood == 'SURPRISED' else 0.05, 0.8 if mood == 'ANGRY' else 0.05,
             0.05, 0.8 if mood == 'NEUTRAL' else 0.2,
-            0.7, 24000.0, 45.0, 14.6, 4.0, True, 3.0, 0.9, 1, 0.2,
+            0.7, 24000.0, 45.0, 14.6, 4.0, True, cfg_scale, top_p, 1, 0.2,
             False, 0.7, False, seed, False, []
         ]
     }
@@ -108,7 +112,9 @@ def generate_tts_audio(host, model, ref_audio_path, text, output_path, mood):
         if not ref_audio_server_path:
             return
 
-        seed = random.randint(1, 2**32 - 1)
+        # seed = random.randint(1, 2**32 - 1)
+        # XXX: seed 42 for VibeVoice
+        seed = 42
         payload = build_tts_payload(model, text, ref_audio_server_path, mood, seed)
 
         print("--- Step 3: Submitting TTS Job and Fetching Result ---")
