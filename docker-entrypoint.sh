@@ -19,16 +19,7 @@ touch "$LOG"
 cd /opt/vibevoice
 
 # Ensure exllamav3 0.0.6 is installed (from source, allow deps so flash-attn resolves)
-if ! python - <<'PY' >/dev/null 2>&1; then
-import sys
-try:
-    import exllamav3, importlib
-    assert getattr(exllamav3, "__version__", "0.0.0") == "0.0.6"
-    sys.exit(0)
-except Exception:
-    sys.exit(1)
-PY
-then
+if ! python ensure_exllamav3.py >/dev/null 2>&1; then
   echo "[setup] Installing exllamav3==0.0.6 from source (will also install flash-attn)"
   uv pip install --system --no-build-isolation \
     "git+https://github.com/Mozer/exllamav3@v0.0.6"
@@ -38,15 +29,7 @@ fi
 if ! python -c "import importlib; importlib.import_module('sageattention')" >/dev/null 2>&1; then
   echo "[setup] SageAttention not found. Building from source for this GPU..."
   # Detect the first GPU's compute capability via torch
-  SM=$(python - <<'PY'
-import torch
-if not torch.cuda.is_available():
-    print("")
-else:
-    maj, min = torch.cuda.get_device_capability(0)
-    print(f"{maj}.{min}")
-PY
-  )
+  SM=$(python detect_cuda_arch.py)
   if [[ -n "$SM" ]]; then
     export TORCH_CUDA_ARCH_LIST="$SM"
     echo "[setup] Using TORCH_CUDA_ARCH_LIST=$TORCH_CUDA_ARCH_LIST"
