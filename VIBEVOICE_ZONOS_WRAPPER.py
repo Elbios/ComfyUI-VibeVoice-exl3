@@ -84,6 +84,10 @@ class VibeVoiceService:
             wav = librosa.resample(wav.astype(np.float32), orig_sr=sr, target_sr=target_sr)
             sr = target_sr
         wav = wav.astype(np.float32)
+        # Treat very short or near-silent references as invalid so we fall back to synthetic
+        duration_s = len(wav) / float(sr)
+        if duration_s < 0.25 or np.max(np.abs(wav)) < 1e-5:
+            raise ValueError("Reference audio too short or silent")
         max_abs = np.max(np.abs(wav))
         if max_abs > 1.0:
             wav = wav / max_abs
@@ -106,7 +110,13 @@ class VibeVoiceService:
         voice_samples = []
         if speaker_audio_path:
             try:
-                voice_samples = [self._load_voice_sample(speaker_audio_path)]
+                vs = self._load_voice_sample(speaker_audio_path)
+                # If the uploaded sample is too short or silent, fall back to synthetic
+                if len(vs) < 24000 * 0.25 or float(np.max(np.abs(vs))) < 1e-5:
+                    logger.info("Reference audio too short/silent; using synthetic sample")
+                    voice_samples = [self._node._create_synthetic_voice_sample(0)]
+                else:
+                    voice_samples = [vs]
             except Exception as exc:  # pylint: disable=broad-except
                 logger.warning("Failed to load reference audio '%s': %s", speaker_audio_path, exc)
         if not voice_samples:
@@ -158,6 +168,26 @@ def _extract_file_path(file_obj) -> Optional[str]:
     if isinstance(file_obj, dict):
         return file_obj.get("name") or file_obj.get("path")
     return getattr(file_obj, "name", None)
+
+
+def _sanitize_seed(val) -> int:
+    """Return a safe 32-bit seed. Falls back to 42 on bad input."""
+    max_u32 = 2**32 - 1
+    try:
+        if val is None:
+            return 42
+        if isinstance(val, str):
+            if val.strip() == "":
+                return 42
+            val = float(val)
+        iv = int(val)
+    except Exception:
+        return 42
+    if iv < 0:
+        iv = 0
+    if iv > max_u32:
+        iv = iv % (max_u32 + 1)
+    return iv
 
 
 def generate_audio(
@@ -218,7 +248,10 @@ def generate_audio(
         unconditional_keys,
     )
 
-    resolved_seed = int(seed) if seed is not None else 42
+        if os.getenv("VV_FORCE_SEED", "0") == "1":
+            resolved_seed = _sanitize_seed(os.getenv("VV_FIXED_SEED", 42))
+        else:
+            resolved_seed = _sanitize_seed(seed)
 
     reference_path = _extract_file_path(speaker_audio)
     cfg_value = 1.4 if cfg_scale in (None, "") else float(cfg_scale)

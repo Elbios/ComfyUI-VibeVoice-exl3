@@ -17,6 +17,7 @@ RUN apt-get update && \
         git \
         cmake \
         build-essential \
+        ninja-build \
         ffmpeg \
         portaudio19-dev \
         libasound2 \
@@ -49,17 +50,16 @@ COPY . /opt/vibevoice
 # - Use uv for speed and system site-packages inside container
 # - Pin user-tested versions for attention backends and exllamav3
 # - Keep gradio stack consistent with Higgs example
+ARG TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0"
+ENV TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST}
+
 RUN uv pip install --system -r requirements.txt && \
     uv pip install --system \
         gradio==5.38.2 \
         gradio-client==1.11.0 \
         fastapi==0.115.14 \
         starlette==0.45.3 && \
-    uv pip install --system \
-        transformers==4.54.1 \
-        flash-attn==2.6.3 \
-        sageattention==2.2.0 \
-        exllamav3==0.0.6 && \
+    uv pip install --system transformers==4.54.1 diffusers formatron && \
     uv cache clean
 
 # Prepare whispercpp runtime files
@@ -94,7 +94,9 @@ ENV VV_MODEL=VibeVoice-7B-no-llm-bf16 \
     VV_TEMPERATURE=0.95 \
     VV_FREE_MEMORY_AFTER_JOB=0 \
     VV_USE_SAMPLING=0 \
-    VV_PRELOAD=1
+    VV_PRELOAD=0 \
+    VV_FORCE_SEED=1 \
+    VV_FIXED_SEED=42
 
 # Network ports (Gradio + Whisper server)
 EXPOSE 7860 8080
