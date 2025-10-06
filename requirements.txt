@@ -8,3 +8,4 @@ av>=14.3.0
 bitsandbytes
 accelerate
 pyaudio
+gradio>=4.44.0
