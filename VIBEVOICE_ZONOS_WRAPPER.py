@@ -248,10 +248,10 @@ def generate_audio(
         unconditional_keys,
     )
 
-        if os.getenv("VV_FORCE_SEED", "0") == "1":
-            resolved_seed = _sanitize_seed(os.getenv("VV_FIXED_SEED", 42))
-        else:
-            resolved_seed = _sanitize_seed(seed)
+    if os.getenv("VV_FORCE_SEED", "0") == "1":
+        resolved_seed = _sanitize_seed(os.getenv("VV_FIXED_SEED", 42))
+    else:
+        resolved_seed = _sanitize_seed(seed)
 
     reference_path = _extract_file_path(speaker_audio)
     cfg_value = 1.4 if cfg_scale in (None, "") else float(cfg_scale)
