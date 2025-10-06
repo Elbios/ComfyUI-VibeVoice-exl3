@@ -787,13 +787,30 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
                     negative_model_kwargs['attention_mask'][sample_idx, :] = 0
                     negative_model_kwargs['attention_mask'][sample_idx, -1] = 1
                 # update past key values
-                for layer_idx, (k_cache, v_cache) in enumerate(zip(negative_model_kwargs['past_key_values'].key_cache, 
-                                                                        negative_model_kwargs['past_key_values'].value_cache)):
-                    # Process each non-diffusion sample
-                    for sample_idx in diffusion_start_indices.tolist():
-                        # Shift cache for this sample
-                        k_cache[sample_idx, :, -1, :] = k_cache[sample_idx, :, 0, :].clone()
-                        v_cache[sample_idx, :, -1, :] = v_cache[sample_idx, :, 0, :].clone()
+                pkv = negative_model_kwargs.get('past_key_values', None)
+                key_caches = getattr(pkv, 'key_cache', None) if pkv is not None else None
+                value_caches = getattr(pkv, 'value_cache', None) if pkv is not None else None
+                if key_caches is not None and value_caches is not None:
+                    for layer_idx, (k_cache, v_cache) in enumerate(zip(key_caches, value_caches)):
+                        # Some implementations lazily allocate caches per layer; skip if missing
+                        if k_cache is None or v_cache is None:
+                            if verbose:
+                                print(f"[warn] Skipping cache shift for layer {layer_idx}: cache is None", flush=True)
+                            continue
+                        # Process each non-diffusion sample
+                        for sample_idx in diffusion_start_indices.tolist():
+                            try:
+                                # Shift cache for this sample (copy first to last)
+                                k_cache[sample_idx, :, -1, :] = k_cache[sample_idx, :, 0, :].clone()
+                                v_cache[sample_idx, :, -1, :] = v_cache[sample_idx, :, 0, :].clone()
+                            except Exception as e:
+                                if verbose:
+                                    print(f"[warn] Cache shift failed at layer {layer_idx}, sample {sample_idx}: {e}", flush=True)
+                                # Best-effort: skip shifting this sample to avoid hard failure
+                                continue
+                else:
+                    if verbose:
+                        print("[warn] Negative past_key_values caches not initialized; skipping cache shift on speech_begin", flush=True)
                 # update negative_input_ids
                 for sample_idx in diffusion_start_indices.tolist():
                     negative_input_ids[sample_idx, -1] = generation_config.speech_start_id
@@ -867,14 +884,25 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
                         negative_model_kwargs['attention_mask'][sample_idx, start_idx] = 0
 
                     # 2. Update past_key_values
-                    for layer_idx, (k_cache, v_cache) in enumerate(zip(negative_model_kwargs['past_key_values'].key_cache, 
-                                                                        negative_model_kwargs['past_key_values'].value_cache)):
-                        # Process each non-diffusion sample
-                        for sample_idx, start_idx in zip(non_diffusion_indices.tolist(), start_indices.tolist()):
-                            if start_idx + 1 < k_cache.shape[2] - 1:
-                                # Shift cache for this sample
-                                k_cache[sample_idx, :, start_idx+1:, :] = k_cache[sample_idx, :, start_idx:-1, :].clone()
-                                v_cache[sample_idx, :, start_idx+1:, :] = v_cache[sample_idx, :, start_idx:-1, :].clone()
+                    pkv = negative_model_kwargs.get('past_key_values', None)
+                    key_caches = getattr(pkv, 'key_cache', None) if pkv is not None else None
+                    value_caches = getattr(pkv, 'value_cache', None) if pkv is not None else None
+                    if key_caches is not None and value_caches is not None:
+                        for layer_idx, (k_cache, v_cache) in enumerate(zip(key_caches, value_caches)):
+                            # Skip layers without allocated caches
+                            if k_cache is None or v_cache is None:
+                                if verbose:
+                                    print(f"[warn] Skipping cache window shift for layer {layer_idx}: cache is None", flush=True)
+                                continue
+                            # Process each non-diffusion sample
+                            for sample_idx, start_idx in zip(non_diffusion_indices.tolist(), start_indices.tolist()):
+                                if start_idx + 1 < k_cache.shape[2] - 1:
+                                    # Shift cache window for this sample
+                                    k_cache[sample_idx, :, start_idx+1:, :] = k_cache[sample_idx, :, start_idx:-1, :].clone()
+                                    v_cache[sample_idx, :, start_idx+1:, :] = v_cache[sample_idx, :, start_idx:-1, :].clone()
+                    else:
+                        if verbose:
+                            print("[warn] Negative past_key_values caches not initialized; skipping cache window shift", flush=True)
                     
                     # 3. Update negative_input_ids
                     for sample_idx, start_idx in zip(non_diffusion_indices.tolist(), start_indices.tolist()):
